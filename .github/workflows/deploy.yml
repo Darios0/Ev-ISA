@@ -1,0 +1,49 @@
+name: Construcción de imagen y despliegue con Docker en EC2
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Construir imagen de Docker y subir al repositorio
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push to Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Reemplaza 'dariouniversidad' con tu usuario real si es diferente
+          tags: dariouniversidad/isa-abril-cicd-docker:web-app
+
+      - name: Deployment vía SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            # Descargar la nueva imagen desde Docker Hub
+            sudo docker pull dariouniversidad/isa-abril-cicd-docker:web-app
+            
+            # Detener y remover el contenedor anterior si existe
+            sudo docker container stop contwebda || true
+            sudo docker container rm contwebda || true
+            
+            # Correr el nuevo contenedor mapeando el puerto 80 de la EC2 al 80 de Nginx
+            sudo docker container run -d --name contwebda -p 80:80 --restart always dariouniversidad/isa-abril-cicd-docker:web-app
+
